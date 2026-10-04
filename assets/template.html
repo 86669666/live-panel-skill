@@ -162,11 +162,15 @@ function pickIdx(m,k){var n=m.values.length,b=Math.floor(hash(m.seed||1,k)*n); i
 var MK={
  counter:function(id,m){return {vars:function(t){V[id]=(m.prefix||'')+fmtNum((m.start||0)+(m.rate||0)*t,m.format)+(m.suffix||'')},events:function(){return []}}},
  cycle:function(id,m){
-  var n=m.values.length;
+  var n=m.values.length, owned=[];
   function idx(j){return m.order?m.order[mod(j,m.order.length)]:mod(j,n)}
   function val(j){var v=m.values[idx(j)]; return typeof v==='object'?v:{t:v}}
-  return {vars:function(t){var j=Math.floor((t-(m.t0||0))/m.period), v=val(j); V[id]=v.t!=null?v.t:(v.m||''); V[id+'.i']=String(idx(j));
-     Object.keys(v).forEach(function(k){V[id+'.'+k]=String(v[k])})},
+  return {vars:function(t){var j=Math.floor((t-(m.t0||0))/m.period), v=val(j), i;
+     // A field set by the previous step must not survive into a step that omits it.
+     for(i=0;i<owned.length;i++) V[owned[i]]='';
+     owned=[];
+     V[id]=v.t!=null?v.t:(v.m||''); V[id+'.i']=String(idx(j));
+     Object.keys(v).forEach(function(k){var key=id+'.'+k; V[key]=String(v[k]); if(k!=='i') owned.push(key)})},
    events:function(lo,hi){var o=[]; if(!m.log) return o; for(var j=Math.floor((lo-(m.t0||0))/m.period);j<=Math.ceil((hi-(m.t0||0))/m.period);j++){var v=val(j); o.push({t:(m.t0||0)+j*m.period,who:m.log.who,c:m.log.c,m:v.m!=null?v.m:(v.t||''),g:v.g||''})} return o}}},
  gauge:function(id,m){
   var th=m.threshold, dec=m.decimals==null?2:m.decimals;
@@ -176,7 +180,7 @@ var MK={
    events:function(lo,hi){var o=[]; if(!m.log) return o; for(var k=Math.floor((lo-(m.t0||0))/m.period);k<=Math.ceil((hi-(m.t0||0))/m.period);k++){var s=st(k),sc={value:s.v.toFixed(dec),label:s.label,dest:s.dest};
      var f=function(x){return String(x).replace(/\{(\w+)\}/g,function(a,b){return sc[b]!=null?sc[b]:a})};
      o.push({t:(m.t0||0)+k*m.period,who:m.log.who,c:m.log.c,m:m.log.msgs[mod(k,m.log.msgs.length)],g:f(m.log.tail||'')})} return o}}},
- any_low:function(id,m){return {vars:function(){V[id]=m.of.some(function(g){return V[g+'.low']==='1'})?'low':'high'},events:function(){return []}}},
+ any_low:function(id,m){return {reads:true, vars:function(){V[id]=m.of.some(function(g){return V[g+'.low']==='1'})?'low':'high'},events:function(){return []}}},
  lane:function(id,m){
   var sp=m.spin||['◐','◓','◑','◒'];
   return {vars:function(t){var c=Math.floor((t-m.off)/m.period), p=(t-m.off)-c*m.period, run=p<m.run;
@@ -185,10 +189,12 @@ var MK={
      V[id+'.state']=run?'busy':'done'},
    events:function(lo,hi){var o=[]; if(!m.log) return o; for(var c=Math.floor((lo-m.off)/m.period);c<=Math.ceil((hi-m.off)/m.period);c++){var e=m.log.msgs[mod(c,m.log.msgs.length)]; o.push({t:m.off+c*m.period+m.run,who:m.log.who,c:m.log.c,m:e[0],g:e[1]||''})} return o}}},
  triggers:function(id,m){
-  var it=m.items, n=it.length, cps=m.cps||9;
-  return {vars:function(t){var k=Math.floor((t-m.t0)/m.period), ph=(t-m.t0)-k*m.period, on=ph<m.on, cur=mod(k,n), I=it[cur];
+  var it=m.items, n=it.length, cps=m.cps||9, owned=[];
+  return {vars:function(t){var k=Math.floor((t-m.t0)/m.period), ph=(t-m.t0)-k*m.period, on=ph<m.on, cur=mod(k,n), I=it[cur], i;
+     for(i=0;i<owned.length;i++) V[owned[i]]='';
+     owned=[];
      V[id+'.active']=on?String(cur):'-1'; V[id+'.cur']=String(cur); V[id+'.phase']=ph;
-     Object.keys(I).forEach(function(f){ if(typeof I[f]!=='object') V[id+'.'+f]=String(I[f]) });
+     Object.keys(I).forEach(function(f){ if(typeof I[f]!=='object'){ var key=id+'.'+f; V[key]=String(I[f]); owned.push(key); } });
      for(var i=0;i<n;i++) V[id+'.label'+i]=(on&&i===cur?'◆ ':'◇ ')+it[i].name;
      V[id+'.calls']=String(k+(m.callsStart==null?1:m.callsStart));
      var tk=m.tokens||{start:0,step:0}; V[id+'.tokens']=fmtNum(tk.start+k*tk.step)+(tk.unit||'');
@@ -311,7 +317,9 @@ window.seek=function(t){
   if(!window.__ready){ window.__pending=t; return; }
   try{
     V.__t=t;
-    MACH.forEach(function(m){m.vars(t)});
+    // any_low reads gauges. Run it after them so declaration order cannot lag one seek.
+    MACH.forEach(function(m){ if(!m.reads) m.vars(t); });
+    MACH.forEach(function(m){ if(m.reads) m.vars(t); });
     // packets on the main flow; count deliveries so "the number on the graph" is the number of packets that arrived
     var sig=0;
     PK.forEach(function(P){ if(P.when&&!cond(P.when)){ P.el.forEach(function(q){q[0].style.display='none';q[1].style.display='none'}); return; } P.o.forEach(function(o,n){ var u=(t+PRE+o)/P.period, d=(u-Math.floor(u))*P.len; sig+=Math.floor(u); putPk(P.el[n][0],P,d); putPk(P.el[n][1],P,d-P.tail); }); });

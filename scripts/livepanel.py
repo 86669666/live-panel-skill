@@ -30,6 +30,28 @@ def canvas(cfg):
     return cv.get("width", pw), cv.get("height", ph), cv.get("duration", 30), cv.get("fps", 30)
 
 
+def sample_times(dur, samples, jitter=0.013):
+    """Sample points inside the published clip.
+
+    A small jitter keeps samples off one phase. Values that the jitter pushes
+    past `dur` wrap back into the clip so the checker does not grade frames
+    the video never shows.
+    """
+    n = int(samples)
+    if n <= 0:
+        return []
+    dur = float(dur or 0)
+    if dur <= 0:
+        return [0.0] * n
+    out = []
+    for i in range(n):
+        t = dur * i / n + jitter * i
+        if t >= dur or t < 0:
+            t = t % dur
+        out.append(t)
+    return out
+
+
 def load_config(path):
     with open(path, encoding="utf-8") as f:
         return json.load(f)

@@ -47,6 +47,8 @@ A line is a string, or an object:
 | `lane` | `period, run, off, busy, done:[...], phase?, spin?, log?:{who,c,msgs:[[text,tag]]}` | `id` (spinner + text, coloured), `id.state` |
 | `triggers` | `period, on, t0, items:[{name, adv:[l1,l2], to?}], color, callsStart?, tokens?:{start,step,unit}, cps?, onText, offText, log?:{who,c,start:{m,g},end:{m,g}}` | `id.active` (index or -1), `id.label<i>`, `id.adv0`, `id.adv1` (typed), `id.calls`, `id.tokens`, `id.status`, `id.<item field>` |
 
+`cycle` and `triggers` clear fields the current step does not have, so a later step does not keep `tool`, `to`, or any other field from the previous one. `any_low` runs after the other machines in that same frame, so it sees the gauges' current values no matter the order of keys in `machines`.
+
 Built-in variables: `{packets}` (deliveries so far), `{clock}`. Log templates may use item/gauge fields, e.g. `{name}`, `{value}`, `{label}`, `{dest}`.
 
 ## Replay hook

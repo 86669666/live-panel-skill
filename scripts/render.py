@@ -10,6 +10,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import livepanel as lp
 
 
+def exit_code(page_error, ffmpeg_rc):
+    """A page that reported an error is a failed render, even if ffmpeg muxed a file."""
+    if page_error:
+        return 1
+    return ffmpeg_rc
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", required=True, help="path to the JSON config")
@@ -46,22 +53,30 @@ def main():
     if a.keep_frames:
         os.makedirs(a.keep_frames, exist_ok=True)
     ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-    with lp.Chrome(chrome, w, h, True if a.no_sandbox else None) as br:
-        br.open("file://" + os.path.abspath(page) + "?manual")
-        for i in range(n):
-            br.seek(i / fps)
-            png = br.shot()
-            if a.keep_frames:
-                Path(a.keep_frames, f"f_{i:04d}.png").write_bytes(png)
-            ff.stdin.write(png)
-            if i % fps == 0:
-                print(f"\r{i}/{n} frames", end="", file=sys.stderr, flush=True)
-        err = br.eval("window.__error||''")
-        if err:
-            print("\npage errors:", err, file=sys.stderr)
-    ff.stdin.close(); rc = ff.wait()
+    err = ""
+    rc = 1
+    try:
+        with lp.Chrome(chrome, w, h, True if a.no_sandbox else None) as br:
+            br.open("file://" + os.path.abspath(page) + "?manual")
+            for i in range(n):
+                br.seek(i / fps)
+                png = br.shot()
+                if a.keep_frames:
+                    Path(a.keep_frames, f"f_{i:04d}.png").write_bytes(png)
+                ff.stdin.write(png)
+                if i % fps == 0:
+                    print(f"\r{i}/{n} frames", end="", file=sys.stderr, flush=True)
+            err = br.eval("window.__error||''") or ""
+    finally:
+        try:
+            ff.stdin.close()
+        except Exception:
+            pass
+        rc = ff.wait()
+    if err:
+        print("\npage errors:", err, file=sys.stderr)
     print(f"\nwrote {a.out} ({n} frames, {w}x{h}@{fps})", file=sys.stderr)
-    sys.exit(rc)
+    sys.exit(exit_code(err, rc))
 
 
 if __name__ == "__main__":

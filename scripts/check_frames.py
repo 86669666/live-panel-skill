@@ -41,7 +41,7 @@ def main():
     page = os.path.join(tempfile.mkdtemp(prefix="livepanel-page-"), "page.html")
     cfg = lp.build_page(a.config, page, a.template)
     w, h, dur, _ = lp.canvas(cfg)
-    times = [dur * i / a.samples + 0.013 * i for i in range(a.samples)]
+    times = lp.sample_times(dur, a.samples)
     shots = [dur * (i + 0.5) / a.png for i in range(a.png)]
     problems = {}
     with lp.Chrome(chrome, w, h, True if a.no_sandbox else None) as br:
