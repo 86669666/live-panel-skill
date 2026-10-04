@@ -49,6 +49,8 @@ A line is a string, or an object:
 
 `cycle` and `triggers` clear fields the current step does not have, so a later step does not keep `tool`, `to`, or any other field from the previous one. `any_low` runs after the other machines in that same frame, so it sees the gauges' current values no matter the order of keys in `machines`.
 
+A gauge does not keep the same `values` index for two steps in a row. The hash picks an index, and if that is the index just shown, the next one is used.
+
 Built-in variables: `{packets}` (deliveries so far), `{clock}`. Log templates may use item/gauge fields, e.g. `{name}`, `{value}`, `{label}`, `{dest}`.
 
 ## Replay hook

@@ -4,7 +4,7 @@ Config-driven animated architecture diagrams. One JSON file drives `assets/templ
 
 ## Checks
 
-- `python3 scripts/check_contract.py` — machine fields match the current frame, sample times stay inside the clip, render exit status.
+- `python3 scripts/check_contract.py` — machine fields match the current frame, a gauge step does not repeat the previous index, sample times stay inside the clip, render exit status.
 - `python3 scripts/check_frames.py --config <example>/config.json --out-dir <dir> --repeat` — overflow, overlap, and replay. Needs Chrome and ffmpeg on `PATH`.
 
 Both are local. Do not add a pip or browser dependency for a check the stdlib scripts can do.

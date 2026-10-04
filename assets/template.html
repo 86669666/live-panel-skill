@@ -158,7 +158,23 @@ function atPath(P,d){if(d<0||d>P.len)return null;for(var i=0;i<P.seg.length;i++)
 function putPk(e,P,d){var q=atPath(P,d); if(!q||(P.gap&&q[1]>P.gap[0]&&q[1]<P.gap[1])){e.style.display='none';return} e.style.display='block';e.style.left=q[0]+'px';e.style.top=q[1]+'px'}
 
 // ---------- machines (each is a pure function of t) ----------
-function pickIdx(m,k){var n=m.values.length,b=Math.floor(hash(m.seed||1,k)*n); if(n>1&&b===Math.floor(hash(m.seed||1,k-1)*n)) b=(b+1)%n; return b}
+// A run of equal raw hashes used to bump onto the same index, so the bar sat still.
+// Step off the index that was actually shown. The chain is anchored far before the clip
+// so the result does not depend on which t is evaluated first.
+var PICK={};
+function pickIdx(m,k){
+  var n=m.values.length;
+  if(!(n>1)) return 0;
+  var key=(m.seed||1)+'/'+n, box=PICK[key];
+  if(!box){ var base=Math.min(-4096,k); box=PICK[key]={base:base,hi:base,at:{}}; box.at[base]=Math.floor(hash(m.seed||1,base)*n); }
+  if(k<box.base){
+    var hi=box.hi, at={}, b0=Math.floor(hash(m.seed||1,k)*n); at[k]=b0;
+    for(var i=k+1;i<=hi;i++){ var b=Math.floor(hash(m.seed||1,i)*n); if(b===at[i-1]) b=(b+1)%n; at[i]=b; }
+    box.base=k; box.at=at; box.hi=hi;
+  }
+  for(var j=box.hi+1;j<=k;j++){ var c=Math.floor(hash(m.seed||1,j)*n); if(c===box.at[j-1]) c=(c+1)%n; box.at[j]=c; box.hi=j; }
+  return box.at[k];
+}
 var MK={
  counter:function(id,m){return {vars:function(t){V[id]=(m.prefix||'')+fmtNum((m.start||0)+(m.rate||0)*t,m.format)+(m.suffix||'')},events:function(){return []}}},
  cycle:function(id,m){

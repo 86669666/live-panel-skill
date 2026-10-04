@@ -2,9 +2,10 @@
 """Lock state-machine invariants that geometry sampling does not see.
 
 check_frames.py measures overflow and replay. It does not notice a cycle or
-trigger keeping a field from the previous step, or any_low lagging a gauge
-declared later in the same config. This script checks those, plus the clip
-sampler and the render exit rule. Stdlib and the repo's Chrome driver only.
+trigger keeping a field from the previous step, any_low lagging a gauge
+declared later in the same config, or a gauge that repeats an index when
+several hashes collide. This script checks those, plus the clip sampler and
+the render exit rule. Stdlib and the repo's Chrome driver only.
 """
 import json, os, sys, tempfile
 from pathlib import Path
@@ -103,11 +104,28 @@ def check_engine(chrome):
             errors += fail(f"trigger did not restore `to` at t=4.2: {got[4.2]!r}")
 
         for name, cfg in (("mode-first", any_first), ("gauge-first", gauge_first)):
-            got = dict(page_text(br, cfg, [0, 2]))
-            if "M=low" not in got[0] or "L=1" not in got[0]:
+            # seed 1 alternates. t=0 is high, t=1 is low; both orders must agree.
+            got = dict(page_text(br, cfg, [0, 1]))
+            if "M=high" not in got[0] or "G=0.9" not in got[0] or "L=1" in got[0]:
                 errors += fail(f"{name} t=0 {got[0]!r}")
-            if "M=high" not in got[2] or "G=0.9" not in got[2] or "L=1" in got[2]:
-                errors += fail(f"{name} lagged at t=2: {got[2]!r}")
+            if "M=low" not in got[1] or "G=0.2" not in got[1] or "L=1" not in got[1]:
+                errors += fail(f"{name} lagged at t=1: {got[1]!r}")
+
+        # codex jev0: hashes at k=6 and k=7 are equal, so the old bump repeated 0.87.
+        # k=6 is [21.0, 24.4), k=7 is [24.4, 27.8), k=8 is [27.8, 31.2).
+        repeat = {
+            "canvas": canvas,
+            "machines": {"g": {"type": "gauge", "values": [0.94, 0.88, 0.78, 0.97, 0.87, 0.52, 0.91],
+                               "threshold": 0.6, "period": 3.4, "t0": 0.6, "seed": 11, "decimals": 2}},
+            "elements": [{"type": "text", "x": 8, "y": 28, "t": "G={g}"}],
+        }
+        got = dict(page_text(br, repeat, [22, 25, 29]))
+        if "G=0.87" not in got[22]:
+            errors += fail(f"gauge step before the collision {got[22]!r}")
+        if "G=0.97" not in got[25]:
+            errors += fail(f"gauge repeated an index at t=25: {got[25]!r}")
+        if "G=0.52" not in got[29]:
+            errors += fail(f"gauge step after the collision {got[29]!r}")
     return errors
 
 

@@ -4,22 +4,16 @@ Single-stream work on `work/main` of the fork. Upstream is pull-only. No force-p
 
 ## Audit
 
-Baseline `8a70aa2`. `scripts/check_frames.py` (120 samples, `--repeat`) is clean on all three examples with the system Chrome and ffmpeg. Geometry and replay are in good shape.
+`050976e` is on `origin/work/main`. The three examples pass geometry and replay. Machine fields clear between steps, and `any_low` no longer depends on key order.
 
-Frame sampling does not catch a state machine that keeps a field from the previous step. Two cases were wrong:
+`gauge` still compared its hash with the previous raw hash. A run of equal hashes all moved to the same next index, so the bar and the log held one value for two periods. On `examples/codex-agents` `jev0` that is t=24.4s to 27.8s (0.87 twice). `jev1` and `jev2` do not repeat inside the 30s clip.
 
-- `cycle` and `triggers` left the previous step's fields in place (`tool`, `to`, and anything else the next step omits).
-- `any_low` read gauges from the previous seek when it was declared first, so the legend could disagree with the bars for that frame.
-
-Rounded `path` corners (`r`) still draw a curve while packets follow the sharp polyline. On the three `r: 8` bends in `examples/agent-architecture` that is a few pixels. Leave it until a before/after frame check shows it is worth the motion change.
+Rounded `path` corners (`r`) still draw a curve while packets follow the sharp polyline. On the three `r: 8` bends that is under 3px, inside a 10px packet. Leave it.
 
 ## This slice
 
-- Clear step fields that the current `cycle` or `triggers` item does not have, and bring them back when a later step has them again.
-- Run `any_low` after the other machines in the same `seek`, so key order in `machines` does not matter.
-- Keep `check_frames.py` sample times inside the clip.
-- Make `render.py` exit non-zero when the page reports an error after frames have started, and close ffmpeg if Chrome fails mid-render.
-- `scripts/check_contract.py` locks the cases above. It does not replace `check_frames.py`.
+- Choose the gauge index from the index that was actually shown last step, anchored before the clip so call order does not matter.
+- `scripts/check_contract.py` locks the `jev0` collision: 0.87, then 0.97, then 0.52.
 
 ## Checks
 
@@ -32,4 +26,4 @@ Run the same frame check for `examples/airbnb/config.json` and `examples/agent-a
 
 ## Next
 
-Do not add a theme, a fourth example, or a browser stack unless a real config cannot say what it needs. The corner-following packet path is the only motion change still worth a later, checked slice.
+Do not add a theme, a fourth example, or a browser stack unless a real config cannot say what it needs. The corner-following packet path stays deferred until a frame check shows the few pixels are worth a motion change.
